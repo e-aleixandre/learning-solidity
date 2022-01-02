@@ -81,26 +81,75 @@ contract Dex is Wallet {
     {
       orders = orderBook[ticker][Action.SELL];    
     }
-    else
+    else if (action == Action.SELL)
     {
       require(balances[msg.sender][ticker] >= amount, "Insufficient token balance");
       orders = orderBook[ticker][Action.BUY];
     }
+    else
+    {
+      revert("The specified action does not exist");
+    }
 
     uint256 totalFilled = 0;
 
-    for (uint256 index = 0; index < orders.length; ++index)
+    for (uint256 i = 0; i < orders.length && totalFilled != amount; ++i)
     {
+      Order storage order = orders[i];
       uint256 leftToFill = amount.sub(totalFilled);
-      uint256 orderAmount = orders[index].amount.sub(orders[index].filled);
+      uint256 orderAmount = order.amount.sub(order.filled);
+      uint256 filled = 0;
 
       if (leftToFill > orderAmount) {
         totalFilled = totalFilled.add(orderAmount);
-        orders[index].filled = orders[index].amount;
+        filled = orderAmount;
+        order.filled = order.amount;
       } else {
-        orders[index].filled = orders[index].filled.add(leftToFill);
-        break;
+        order.filled = order.filled.add(leftToFill);
+        totalFilled = amount;
+        filled = leftToFill;
       }
+
+      uint256 cost = filled.mul(order.price);
+
+      if (action == Action.BUY)
+      {
+        require(balances[msg.sender]["ETH"] >= cost, "Insuficient ETH to cover the transaction");
+        
+        balances[order.trader][ticker] = balances[order.trader][ticker].sub(filled);
+        balances[msg.sender][ticker] = balances[msg.sender][ticker].add(filled);
+
+        balances[msg.sender]["ETH"] = balances[msg.sender]["ETH"].sub(cost);
+        balances[order.trader]["ETH"] = balances[order.trader]["ETH"].add(cost);
+      }
+      else
+      {
+        balances[msg.sender][ticker] = balances[msg.sender][ticker].sub(filled);
+        balances[order.trader][ticker] = balances[order.trader][ticker].add(filled);
+
+        balances[order.trader]["ETH"] = balances[order.trader]["ETH"].sub(cost);
+        balances[msg.sender]["ETH"] = balances[msg.sender]["ETH"].add(cost);
+      }
+    }
+
+    uint256 index = 0;
+
+    while (orders[index].amount == orders[index].filled && index < orders.length)
+    {
+      ++index;
+    }
+
+    uint256 pops = index;
+
+    for (uint256 i = 0; index != 0 && index < orders.length; ++i)
+    {
+      orders[i] = orders[index];
+      ++index;
+    }
+
+    for (uint256 i = 0; i < pops; ++i)
+    {
+      orders.pop();
     }
   }
 }
