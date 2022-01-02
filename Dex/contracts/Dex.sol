@@ -19,6 +19,7 @@ contract Dex is Wallet {
     Action action;
     bytes32 ticker;
     uint256 amount;
+    uint256 filled;
     uint256 price;
   }
 
@@ -31,9 +32,9 @@ contract Dex is Wallet {
     return orderBook[ticker][action];
   }
 
-  function createLimitOrder(Action action, bytes32 ticker, uint256 amount, uint256 price) public {
+  function createLimitOrder(Action action, bytes32 ticker, uint256 amount, uint256 price) external {
     if (action == Action.BUY)
-    require(balances[msg.sender]["ETH"] >= amount.mul(price), "Not enough ETH for buying");
+      require(balances[msg.sender]["ETH"] >= amount.mul(price), "Not enough ETH for buying");
     else if (action == Action.SELL)
       require(balances[msg.sender][ticker] >= amount, "Insufficient token amount for selling");
     else
@@ -42,7 +43,7 @@ contract Dex is Wallet {
     Order[] storage orders = orderBook[ticker][action];
 
     orders.push(
-      Order(nextId++, msg.sender, action, ticker, amount, price)
+      Order(nextId++, msg.sender, action, ticker, amount, 0, price)
     );
 
     uint256 i = orders.length > 0 ? orders.length - 1 : 0;
@@ -73,4 +74,33 @@ contract Dex is Wallet {
     }
   }
 
+  function createMarketOrder(Action action, bytes32 ticker, uint256 amount) external {
+    Order[] storage orders;
+
+    if (action == Action.BUY)
+    {
+      orders = orderBook[ticker][Action.SELL];    
+    }
+    else
+    {
+      require(balances[msg.sender][ticker] >= amount, "Insufficient token balance");
+      orders = orderBook[ticker][Action.BUY];
+    }
+
+    uint256 totalFilled = 0;
+
+    for (uint256 index = 0; index < orders.length; ++index)
+    {
+      uint256 leftToFill = amount.sub(totalFilled);
+      uint256 orderAmount = orders[index].amount.sub(orders[index].filled);
+
+      if (leftToFill > orderAmount) {
+        totalFilled = totalFilled.add(orderAmount);
+        orders[index].filled = orders[index].amount;
+      } else {
+        orders[index].filled = orders[index].filled.add(leftToFill);
+        break;
+      }
+    }
+  }
 }

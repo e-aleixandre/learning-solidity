@@ -128,8 +128,6 @@ contract("Dex", accounts => {
         await createSellOrder(100, 80);
 
         let orderBook = await dex.getOrderBook(web3.utils.fromUtf8("VISAN"), 1);
-        
-        console.log(orderBook);
 
         for (let i = 0; i < orderBook.length - 1; ++i)
             assert(parseInt(orderBook[i].price) <= parseInt(orderBook[i + 1].price));
